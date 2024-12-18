@@ -26,10 +26,11 @@
   </div>
 
   <script>
-    const serviceUUID = '180a'; // Info Service UUID
-    const batteryCharUUID = '2a19'; // Battery Level Characteristic UUID
-    const solarCharUUID = '2a6e'; // Solar Voltage Characteristic UUID
-    const ledCharUUID = '2a56'; // LED Status Characteristic UUID
+    // BLE Service and Characteristic UUIDs
+    const serviceUUID = 'device_information'; // Use the standard Device Information service
+    const batteryCharUUID = '0x2A19';         // Battery Level characteristic UUID
+    const solarCharUUID = '00002a6e-0000-1000-8000-00805f9b34fb'; // Custom Solar Voltage UUID
+    const ledCharUUID = '00002a56-0000-1000-8000-00805f9b34fb';   // Custom LED Status UUID
 
     document.getElementById('connectBtn').addEventListener('click', async () => {
       const statusElem = document.getElementById('status');
@@ -38,12 +39,13 @@
       const ledElem = document.getElementById('led');
 
       try {
-        statusElem.textContent = 'Status: Scanning...';
+        statusElem.textContent = 'Status: Scanning for Beacon...';
+
         // Request a BLE device
         const device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: false,
-          filters: [{ namePrefix: 'ATRONIA-LIGHT' }],
-          optionalServices: [serviceUUID]
+          filters: [{ namePrefix: 'ATRONIA-LIGHT' }], // Scan for devices with this name
+          optionalServices: [serviceUUID]            // Service UUID for Device Information
         });
 
         statusElem.textContent = 'Status: Connecting...';
@@ -61,13 +63,13 @@
 
         // Read and Display Data
         const batteryValue = await batteryChar.readValue();
-        batteryElem.textContent = batteryValue.getUint8(0);
+        batteryElem.textContent = batteryValue.getUint8(0); // Read battery percentage as uint8
 
         const solarValue = await solarChar.readValue();
-        solarElem.textContent = (solarValue.getFloat32(0, true)).toFixed(2);
+        solarElem.textContent = (solarValue.getFloat32(0, true)).toFixed(2); // Read solar voltage as float
 
         const ledValue = await ledChar.readValue();
-        const ledStatus = ledValue.getUint8(0);
+        const ledStatus = ledValue.getUint8(0); // Read LED status as uint8
         ledElem.textContent = ledStatus === 0 ? 'OFF' : ledStatus === 1 ? 'ON' : 'FLASHING';
 
         // Notify on Disconnect
