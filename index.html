@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE Beacon Reader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      text-align: center;
+    }
+    .info {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>ATRONIA Beacon Reader</h1>
+  <button id="connectBtn">Connect to Beacon</button>
+  <div id="status" class="info">Status: Not Connected</div>
+  <div id="data" class="info">
+    <p>Battery Level: <span id="battery">--</span>%</p>
+    <p>Solar Voltage: <span id="solar">--</span> V</p>
+    <p>LED Status: <span id="led">--</span></p>
+  </div>
+
+  <script>
+    const serviceUUID = '180a'; // Info Service UUID
+    const batteryCharUUID = '2a19'; // Battery Level Characteristic UUID
+    const solarCharUUID = '2a6e'; // Solar Voltage Characteristic UUID
+    const ledCharUUID = '2a56'; // LED Status Characteristic UUID
+
+    document.getElementById('connectBtn').addEventListener('click', async () => {
+      const statusElem = document.getElementById('status');
+      const batteryElem = document.getElementById('battery');
+      const solarElem = document.getElementById('solar');
+      const ledElem = document.getElementById('led');
+
+      try {
+        statusElem.textContent = 'Status: Scanning...';
+        // Request a BLE device
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: false,
+          filters: [{ namePrefix: 'ATRONIA-LIGHT' }],
+          optionalServices: [serviceUUID]
+        });
+
+        statusElem.textContent = 'Status: Connecting...';
+        const server = await device.gatt.connect();
+
+        statusElem.textContent = 'Status: Fetching Characteristics...';
+        const service = await server.getPrimaryService(serviceUUID);
+
+        // Get Characteristics
+        const batteryChar = await service.getCharacteristic(batteryCharUUID);
+        const solarChar = await service.getCharacteristic(solarCharUUID);
+        const ledChar = await service.getCharacteristic(ledCharUUID);
+
+        statusElem.textContent = 'Status: Connected';
+
+        // Read and Display Data
+        const batteryValue = await batteryChar.readValue();
+        batteryElem.textContent = batteryValue.getUint8(0);
+
+        const solarValue = await solarChar.readValue();
+        solarElem.textContent = (solarValue.getFloat32(0, true)).toFixed(2);
+
+        const ledValue = await ledChar.readValue();
+        const ledStatus = ledValue.getUint8(0);
+        ledElem.textContent = ledStatus === 0 ? 'OFF' : ledStatus === 1 ? 'ON' : 'FLASHING';
+
+        // Notify on Disconnect
+        device.addEventListener('gattserverdisconnected', () => {
+          statusElem.textContent = 'Status: Disconnected';
+        });
+
+      } catch (error) {
+        console.error(error);
+        statusElem.textContent = 'Status: Error - ' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>
