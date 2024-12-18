@@ -27,8 +27,8 @@
 
   <script>
     // BLE Service and Characteristic UUIDs
-    const serviceUUID = '0x180A';         // Device Information service alias
-    const batteryCharUUID = '0x2A19';    // Battery Level characteristic UUID
+    const serviceUUID = '0000180a-0000-1000-8000-00805f9b34fb'; // Full UUID for Device Information
+    const batteryCharUUID = '0x2A19';         // Battery Level characteristic UUID
     const solarCharUUID = '00002a6e-0000-1000-8000-00805f9b34fb'; // Custom Solar Voltage UUID
     const ledCharUUID = '00002a56-0000-1000-8000-00805f9b34fb';   // Custom LED Status UUID
 
@@ -45,7 +45,7 @@
         const device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: false,
           filters: [{ namePrefix: 'ATRONIA-LIGHT' }], // Scan for devices with this name
-          optionalServices: [serviceUUID]            // Service UUID for Device Information
+          optionalServices: [serviceUUID]            // Full UUID for Device Information
         });
 
         statusElem.textContent = 'Status: Connecting...';
