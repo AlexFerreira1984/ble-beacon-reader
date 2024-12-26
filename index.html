@@ -49,13 +49,13 @@
     const ledStatusSpan = document.getElementById("ledStatus");
     const chargeStatusSpan = document.getElementById("chargeStatus");
 
-    let device, server, batteryLevelChar, solarVoltageChar, ledStatusChar, chargeStatusChar, updateInterval;
+    let device, server, batteryLevelChar, solarVoltageChar, ledStatusChar, chargeStatusChar;
 
     connectButton.addEventListener("click", async () => {
       try {
         statusDiv.textContent = "Status: Connecting...";
         
-        // Request device with specific BLE service
+        // Request BLE device
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: false,
           filters: [{ name: "ATRONIA-LIGHT" }],
@@ -68,23 +68,21 @@
         server = await device.gatt.connect();
         statusDiv.textContent = "Status: Connected";
 
-        // Enable Disconnect Button
         connectButton.disabled = true;
         disconnectButton.disabled = false;
 
-        // Get Battery Service and Characteristics
+        // Access Services and Characteristics
         const batteryService = await server.getPrimaryService("0000180f-0000-1000-8000-00805f9b34fb");
         batteryLevelChar = await batteryService.getCharacteristic("00002a19-0000-1000-8000-00805f9b34fb");
 
-        // Get Solar Voltage Characteristic
         const solarService = await server.getPrimaryService("0000180a-0000-1000-8000-00805f9b34fb");
         solarVoltageChar = await solarService.getCharacteristic("00002a6e-0000-1000-8000-00805f9b34fb");
         ledStatusChar = await solarService.getCharacteristic("00002a56-0000-1000-8000-00805f9b34fb");
         chargeStatusChar = await solarService.getCharacteristic("00002a1c-0000-1000-8000-00805f9b34fb");
 
-        // Update Values Periodically
-        updateInterval = setInterval(updateValues, 10000);
-        await updateValues(); // Initial Read
+        // Read and Update Values
+        updateValues();
+        setInterval(updateValues, 10000);
       } catch (error) {
         console.error("Error:", error);
         statusDiv.textContent = "Status: Error - " + error.message;
@@ -98,12 +96,7 @@
         connectButton.disabled = false;
         disconnectButton.disabled = true;
 
-        // Clear Interval
-        if (updateInterval) {
-          clearInterval(updateInterval);
-        }
-
-        // Reset Displayed Values
+        // Clear Displayed Values
         batteryLevelSpan.textContent = "N/A";
         solarVoltageSpan.textContent = "N/A";
         ledStatusSpan.textContent = "N/A";
@@ -113,28 +106,28 @@
 
     async function updateValues() {
       try {
-        // Read Battery Level
+        // Battery Level
         const batteryValue = await batteryLevelChar.readValue();
         const batteryLevel = batteryValue.getUint8(0);
         batteryLevelSpan.textContent = batteryLevel;
 
-        // Read Solar Voltage
+        // Solar Voltage
         const solarValue = await solarVoltageChar.readValue();
         const solarVoltage = solarValue.getFloat32(0, true);
         solarVoltageSpan.textContent = solarVoltage.toFixed(2);
 
-        // Read LED Status
+        // LED Status
         const ledValue = await ledStatusChar.readValue();
         const ledStatus = ledValue.getUint8(0);
         ledStatusSpan.textContent = ledStatus === 0 ? "OFF" : ledStatus === 1 ? "ON" : "FLASHING";
 
-        // Read Charge Status
+        // Charge Status
         const chargeValue = await chargeStatusChar.readValue();
         const chargeStatus = chargeValue.getUint8(0);
         chargeStatusSpan.textContent =
           chargeStatus === 0 ? "Not Charging" : chargeStatus === 1 ? "Charging" : "Floating";
       } catch (error) {
-        console.error("Error while updating values:", error);
+        console.error("Update Error:", error);
         statusDiv.textContent = "Status: Error - " + error.message;
       }
     }
