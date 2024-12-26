@@ -3,83 +3,104 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BLE Beacon Reader</title>
+  <title>ATRONIA-LIGHT BLE Monitor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
-      text-align: center;
+      margin: 20px;
     }
-    .info {
-      margin: 10px 0;
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #status {
+      font-size: 18px;
+      margin-top: 10px;
+      color: #007BFF;
+    }
+    .data {
+      margin-top: 20px;
+      font-size: 16px;
     }
   </style>
 </head>
 <body>
-  <h1>ATRONIA Beacon Reader</h1>
-  <button id="connectBtn">Connect to Beacon</button>
-  <div id="status" class="info">Status: Not Connected</div>
-  <div id="data" class="info">
-    <p>Battery Level: <span id="battery">--</span>%</p>
-    <p>Solar Voltage: <span id="solar">--</span> V</p>
-    <p>LED Status: <span id="led">--</span></p>
+  <h1>ATRONIA-LIGHT BLE Monitor</h1>
+  <button id="connectButton">Connect to ATRONIA-LIGHT</button>
+  <div id="status">Status: Disconnected</div>
+  <div class="data">
+    <p><strong>Battery Level:</strong> <span id="batteryLevel">N/A</span>%</p>
+    <p><strong>Solar Voltage:</strong> <span id="solarVoltage">N/A</span> V</p>
+    <p><strong>LED Status:</strong> <span id="ledStatus">N/A</span></p>
+    <p><strong>Charge Status:</strong> <span id="chargeStatus">N/A</span></p>
   </div>
-
   <script>
-    // BLE Service and Characteristic UUIDs
-    const batteryServiceUUID = '0000180f-0000-1000-8000-00805f9b34fb';  // Battery Service
-    const deviceInfoServiceUUID = '0000180a-0000-1000-8000-00805f9b34fb'; // Device Information Service
-    const batteryCharUUID = '00002a19-0000-1000-8000-00805f9b34fb';      // Battery Level
-    const solarCharUUID = '00002a6e-0000-1000-8000-00805f9b34fb';        // Custom Solar Voltage
-    const ledCharUUID = '00002a56-0000-1000-8000-00805f9b34fb';          // Custom LED Status
+    const connectButton = document.getElementById("connectButton");
+    const statusDiv = document.getElementById("status");
+    const batteryLevelSpan = document.getElementById("batteryLevel");
+    const solarVoltageSpan = document.getElementById("solarVoltage");
+    const ledStatusSpan = document.getElementById("ledStatus");
+    const chargeStatusSpan = document.getElementById("chargeStatus");
 
-    document.getElementById('connectBtn').addEventListener('click', async () => {
-      const statusElem = document.getElementById('status');
-      const batteryElem = document.getElementById('battery');
-      const solarElem = document.getElementById('solar');
-      const ledElem = document.getElementById('led');
-
+    connectButton.addEventListener("click", async () => {
       try {
-        statusElem.textContent = 'Status: Scanning for Beacon...';
-
-        // Request a BLE device
+        statusDiv.textContent = "Status: Connecting...";
+        
+        // Request device with specific BLE service
         const device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: false,
-          filters: [{ namePrefix: 'ATRONIA-LIGHT' }], // Scan for devices with this name
-          optionalServices: [batteryServiceUUID, deviceInfoServiceUUID] // Include required services
+          filters: [{ name: "ATRONIA-LIGHT" }],
+          optionalServices: [
+            "0000180f-0000-1000-8000-00805f9b34fb", // Battery Service
+            "0000180a-0000-1000-8000-00805f9b34fb"  // Device Info Service
+          ]
         });
 
-        statusElem.textContent = 'Status: Connecting...';
         const server = await device.gatt.connect();
+        statusDiv.textContent = "Status: Connected";
 
-        // Fetch Battery Level from Battery Service
-        const batteryService = await server.getPrimaryService(batteryServiceUUID);
-        const batteryChar = await batteryService.getCharacteristic(batteryCharUUID);
-        const batteryValue = await batteryChar.readValue();
-        batteryElem.textContent = batteryValue.getUint8(0); // Read battery percentage as uint8
+        // Get Battery Service and Characteristics
+        const batteryService = await server.getPrimaryService("0000180f-0000-1000-8000-00805f9b34fb");
+        const batteryLevelChar = await batteryService.getCharacteristic("00002a19-0000-1000-8000-00805f9b34fb");
 
-        // Fetch Solar Voltage from Device Information Service
-        const deviceInfoService = await server.getPrimaryService(deviceInfoServiceUUID);
-        const solarChar = await deviceInfoService.getCharacteristic(solarCharUUID);
-        const solarValue = await solarChar.readValue();
-        solarElem.textContent = (solarValue.getFloat32(0, true)).toFixed(2); // Read solar voltage as float
+        // Get Solar Voltage Characteristic
+        const solarService = await server.getPrimaryService("0000180a-0000-1000-8000-00805f9b34fb");
+        const solarVoltageChar = await solarService.getCharacteristic("00002a6e-0000-1000-8000-00805f9b34fb");
+        const ledStatusChar = await solarService.getCharacteristic("00002a56-0000-1000-8000-00805f9b34fb");
+        const chargeStatusChar = await solarService.getCharacteristic("00002a1c-0000-1000-8000-00805f9b34fb");
 
-        // Fetch LED Status from Device Information Service
-        const ledChar = await deviceInfoService.getCharacteristic(ledCharUUID);
-        const ledValue = await ledChar.readValue();
-        const ledStatus = ledValue.getUint8(0); // Read LED status as uint8
-        ledElem.textContent = ledStatus === 0 ? 'OFF' : ledStatus === 1 ? 'ON' : 'FLASHING';
-
-        statusElem.textContent = 'Status: Connected';
-
-        // Notify on Disconnect
-        device.addEventListener('gattserverdisconnected', () => {
-          statusElem.textContent = 'Status: Disconnected';
+        // Read and Display Battery Level
+        batteryLevelChar.addEventListener("characteristicvaluechanged", (event) => {
+          const batteryLevel = event.target.value.getUint8(0);
+          batteryLevelSpan.textContent = batteryLevel;
         });
+        await batteryLevelChar.startNotifications();
+
+        // Read and Display Solar Voltage
+        solarVoltageChar.addEventListener("characteristicvaluechanged", (event) => {
+          const solarVoltage = event.target.value.getFloat32(0, true);
+          solarVoltageSpan.textContent = solarVoltage.toFixed(2);
+        });
+        await solarVoltageChar.startNotifications();
+
+        // Read and Display LED Status
+        ledStatusChar.addEventListener("characteristicvaluechanged", (event) => {
+          const ledStatus = event.target.value.getUint8(0);
+          ledStatusSpan.textContent = ledStatus === 0 ? "OFF" : ledStatus === 1 ? "ON" : "FLASHING";
+        });
+        await ledStatusChar.startNotifications();
+
+        // Read and Display Charge Status
+        chargeStatusChar.addEventListener("characteristicvaluechanged", (event) => {
+          const chargeStatus = event.target.value.getUint8(0);
+          chargeStatusSpan.textContent =
+            chargeStatus === 0 ? "Not Charging" : chargeStatus === 1 ? "Charging" : "Floating";
+        });
+        await chargeStatusChar.startNotifications();
 
       } catch (error) {
-        console.error(error);
-        statusElem.textContent = 'Status: Error - ' + error.message;
+        console.error("Error:", error);
+        statusDiv.textContent = "Status: Error - " + error.message;
       }
     });
   </script>
