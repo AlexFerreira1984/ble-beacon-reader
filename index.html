@@ -22,11 +22,17 @@
       margin-top: 20px;
       font-size: 16px;
     }
+    button {
+      margin-right: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
   <h1>ATRONIA-LIGHT BLE Monitor</h1>
-  <button id="connectButton">Connect to ATRONIA-LIGHT</button>
+  <button id="connectButton">Connect</button>
+  <button id="disconnectButton" disabled>Disconnect</button>
   <div id="status">Status: Disconnected</div>
   <div class="data">
     <p><strong>Battery Level:</strong> <span id="batteryLevel">N/A</span>%</p>
@@ -36,18 +42,21 @@
   </div>
   <script>
     const connectButton = document.getElementById("connectButton");
+    const disconnectButton = document.getElementById("disconnectButton");
     const statusDiv = document.getElementById("status");
     const batteryLevelSpan = document.getElementById("batteryLevel");
     const solarVoltageSpan = document.getElementById("solarVoltage");
     const ledStatusSpan = document.getElementById("ledStatus");
     const chargeStatusSpan = document.getElementById("chargeStatus");
 
+    let device, server, batteryLevelChar, solarVoltageChar, ledStatusChar, chargeStatusChar, updateInterval;
+
     connectButton.addEventListener("click", async () => {
       try {
         statusDiv.textContent = "Status: Connecting...";
         
         // Request device with specific BLE service
-        const device = await navigator.bluetooth.requestDevice({
+        device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: false,
           filters: [{ name: "ATRONIA-LIGHT" }],
           optionalServices: [
@@ -56,53 +65,79 @@
           ]
         });
 
-        const server = await device.gatt.connect();
+        server = await device.gatt.connect();
         statusDiv.textContent = "Status: Connected";
+
+        // Enable Disconnect Button
+        connectButton.disabled = true;
+        disconnectButton.disabled = false;
 
         // Get Battery Service and Characteristics
         const batteryService = await server.getPrimaryService("0000180f-0000-1000-8000-00805f9b34fb");
-        const batteryLevelChar = await batteryService.getCharacteristic("00002a19-0000-1000-8000-00805f9b34fb");
+        batteryLevelChar = await batteryService.getCharacteristic("00002a19-0000-1000-8000-00805f9b34fb");
 
         // Get Solar Voltage Characteristic
         const solarService = await server.getPrimaryService("0000180a-0000-1000-8000-00805f9b34fb");
-        const solarVoltageChar = await solarService.getCharacteristic("00002a6e-0000-1000-8000-00805f9b34fb");
-        const ledStatusChar = await solarService.getCharacteristic("00002a56-0000-1000-8000-00805f9b34fb");
-        const chargeStatusChar = await solarService.getCharacteristic("00002a1c-0000-1000-8000-00805f9b34fb");
+        solarVoltageChar = await solarService.getCharacteristic("00002a6e-0000-1000-8000-00805f9b34fb");
+        ledStatusChar = await solarService.getCharacteristic("00002a56-0000-1000-8000-00805f9b34fb");
+        chargeStatusChar = await solarService.getCharacteristic("00002a1c-0000-1000-8000-00805f9b34fb");
 
-        // Read and Display Battery Level
-        batteryLevelChar.addEventListener("characteristicvaluechanged", (event) => {
-          const batteryLevel = event.target.value.getUint8(0);
-          batteryLevelSpan.textContent = batteryLevel;
-        });
-        await batteryLevelChar.startNotifications();
-
-        // Read and Display Solar Voltage
-        solarVoltageChar.addEventListener("characteristicvaluechanged", (event) => {
-          const solarVoltage = event.target.value.getFloat32(0, true);
-          solarVoltageSpan.textContent = solarVoltage.toFixed(2);
-        });
-        await solarVoltageChar.startNotifications();
-
-        // Read and Display LED Status
-        ledStatusChar.addEventListener("characteristicvaluechanged", (event) => {
-          const ledStatus = event.target.value.getUint8(0);
-          ledStatusSpan.textContent = ledStatus === 0 ? "OFF" : ledStatus === 1 ? "ON" : "FLASHING";
-        });
-        await ledStatusChar.startNotifications();
-
-        // Read and Display Charge Status
-        chargeStatusChar.addEventListener("characteristicvaluechanged", (event) => {
-          const chargeStatus = event.target.value.getUint8(0);
-          chargeStatusSpan.textContent =
-            chargeStatus === 0 ? "Not Charging" : chargeStatus === 1 ? "Charging" : "Floating";
-        });
-        await chargeStatusChar.startNotifications();
-
+        // Update Values Periodically
+        updateInterval = setInterval(updateValues, 10000);
+        await updateValues(); // Initial Read
       } catch (error) {
         console.error("Error:", error);
         statusDiv.textContent = "Status: Error - " + error.message;
       }
     });
+
+    disconnectButton.addEventListener("click", () => {
+      if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+        statusDiv.textContent = "Status: Disconnected";
+        connectButton.disabled = false;
+        disconnectButton.disabled = true;
+
+        // Clear Interval
+        if (updateInterval) {
+          clearInterval(updateInterval);
+        }
+
+        // Reset Displayed Values
+        batteryLevelSpan.textContent = "N/A";
+        solarVoltageSpan.textContent = "N/A";
+        ledStatusSpan.textContent = "N/A";
+        chargeStatusSpan.textContent = "N/A";
+      }
+    });
+
+    async function updateValues() {
+      try {
+        // Read Battery Level
+        const batteryValue = await batteryLevelChar.readValue();
+        const batteryLevel = batteryValue.getUint8(0);
+        batteryLevelSpan.textContent = batteryLevel;
+
+        // Read Solar Voltage
+        const solarValue = await solarVoltageChar.readValue();
+        const solarVoltage = solarValue.getFloat32(0, true);
+        solarVoltageSpan.textContent = solarVoltage.toFixed(2);
+
+        // Read LED Status
+        const ledValue = await ledStatusChar.readValue();
+        const ledStatus = ledValue.getUint8(0);
+        ledStatusSpan.textContent = ledStatus === 0 ? "OFF" : ledStatus === 1 ? "ON" : "FLASHING";
+
+        // Read Charge Status
+        const chargeValue = await chargeStatusChar.readValue();
+        const chargeStatus = chargeValue.getUint8(0);
+        chargeStatusSpan.textContent =
+          chargeStatus === 0 ? "Not Charging" : chargeStatus === 1 ? "Charging" : "Floating";
+      } catch (error) {
+        console.error("Error while updating values:", error);
+        statusDiv.textContent = "Status: Error - " + error.message;
+      }
+    }
   </script>
 </body>
 </html>
